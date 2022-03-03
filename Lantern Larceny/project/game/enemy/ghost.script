@@ -1,0 +1,216 @@
+-- Pre Hashing
+-- Collision
+local hit = hash("hit")
+local hide = hash("hide")
+local contact_pr = hash("contact_point_response")
+local ghost = hash("enemy")
+local player = hash("player")
+
+local max_dist = 340
+
+go.property("health", 50) -- Max Health
+go.property("damage", 20) -- Enemy Damage
+go.property("speed", 150) -- Max Speed
+go.property("colour", vmath.vector4(1, 1, 1, 1)) -- Sprite Colour
+go.property("scale", 1) -- Enemy Scale (scales collisionobject)
+go.property("dropchance", vmath.vector4(2.5,5,15,1)) -- powerup drop chance (rapid,super,health)
+go.property("points", 1) -- Points on kill
+
+function init(self)
+	self.visible = true -- if ghost is visible in the current frame
+	self.was_visible = true -- if ghost was visible in the previous frame
+
+	self.close = false -- if ghost is close to player
+
+	self.hit = false -- if ghost has been hit
+
+	self.dead = false -- if ghost health is below 0
+	self.play = true
+
+	self.pop = false -- if ghost collided with player
+	
+	particleplay("#ghost_trail")
+
+	self.velocity = vmath.vector3()
+	self.correction = vmath.vector3()
+
+	go.set("#sprite", "tint", self.colour) -- set sprite colour
+	go.set(".", "scale", vmath.vector3(self.scale,self.scale,self.scale)) -- set scale uniformly
+end
+
+function final(self)
+	msg.post("/ghost_spawner", "dead")
+end
+
+function update(self, dt)
+	if self.visible ~= lantern then
+		msg.post(".", "hide")
+	end
+
+	if self.visible ~= self.was_visible then
+		self.play = self.visible
+		if self.play then
+			particleplay("#ghost_trail")
+		else
+			particlestop("#ghost_trail")
+		end
+		self.was_visible = self.visible
+	end
+
+	-- Find distance from player
+	local tint = 1
+	if not deadfull then
+		tint = math.abs(vmath.length(go.get_position()-go.get_position("/player")))
+	else
+		tint = math.abs(vmath.length(go.get_position()-go.get_position("/pointer")))
+	end
+	if self.visible or dead then
+		if tint <= max_dist then -- if distance is same/less than max radius
+			go.set("#sprite", "tint.w", (max_dist-tint)/max_dist)
+			if self.play == false then
+				self.play = true
+				particleplay("#ghost_trail")
+			end
+		else
+			--self.visible = false
+			go.set("#sprite", "tint.w", 0)
+			self.play = false
+			particlestop("#ghost_trail")
+		end
+	else
+		if not self.hit and not self.dead then
+			if tint <= 80 and not self.close then
+				self.close = true
+				go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, 0.25)
+			elseif tint >= 80 and self.close then
+				self.close = false
+				go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_LINEAR, 0.25)
+			end
+		end
+	end
+
+	if self.health <= 0 and not self.dead --[[and not self.hit--]] then
+		--self.hit = true
+		self.dead = true
+		go.cancel_animations(".", "position")
+		msg.post("#collisionobject", "disable")
+		if not self.pop then
+			msg.post("/player", "points",{points = self.points})
+			for i = 0, self.dropchance.w-1 do
+				local power_chance = math.random(1,100)
+				local power_pos = go.get_position()+vmath.vector3(i*math.random(-40,40),i*math.random(-40,40),0)
+				local power_scale = vmath.vector3(1,1,1)
+				if power_chance <= self.dropchance.x then
+					factory.create("#power-ups",power_pos,vmath.quat_rotation_z(0),{type = 3},power_scale)
+				elseif power_chance <= self.dropchance.x+self.dropchance.y then
+					factory.create("#power-ups",power_pos,vmath.quat_rotation_z(0),{type = 2},power_scale)
+				elseif power_chance <= self.dropchance.x+self.dropchance.y+self.dropchance.z then
+					factory.create("#power-ups",power_pos,vmath.quat_rotation_z(0),{type = 1},power_scale)
+				end
+			end
+		end
+		particlestop("#ghost_trail")
+		particleplay("#ghost_pop")
+		go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INCIRC, 0.3,0,function()
+			go.delete()
+		end)
+	end
+
+	self.velocity = vmath.vector3()
+	if not self.hit then
+		-- let game object follow mouse/touch movement
+		local from = go.get_position() -- player position
+		local to = vmath.vector3() --vmath.vector3(action.x,action.y,0)-vmath.vector3(480,320,0)+go.get_position()
+		if dead then
+			to = go.get_position("/pointer") --+ vmath.vector3(math.random(-10,10),math.random(-10,10),0)
+		else
+			to = go.get_position("/player")
+		end
+		-- globalise mouse coords
+		local direction = to-from
+		local rotation = vmath.quat_rotation_z(math.atan2(direction.y, direction.x)) -- z rotation in radians (I think)
+		go.set_rotation(rotation)
+
+		local speed = self.speed*(3/4)
+		if self.visible then
+			speed = self.speed
+		end
+		--go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, to, go.EASING_LINEAR, speed)
+
+		rotation = go.get_rotation()
+		to = vmath.rotate(rotation, vmath.vector3(speed, speed, 0))
+
+		self.velocity = self.velocity + to
+	end
+	local newpos = go.get_position() + ((self.velocity)*dt)
+	go.set_position(newpos)
+	self.correction = vmath.vector3()
+end
+
+local function reset(self)
+	self.hit = false
+end
+
+-- Collisions (https://defold.com/tutorials/platformer/)
+local function handle_obstacle_contact(self, normal, distance)
+	-- project the correction vector onto the contact normal
+	local proj = vmath.dot(self.correction, normal)
+	-- calculate compensation for contact point
+	local comp = (distance - proj) * normal
+	-- add to correction
+	self.correction = self.correction + comp
+	-- apply the compensation to the player character
+	go.set_position(go.get_position() + comp)
+	-- project the velocity onto the normal
+	proj = vmath.dot(self.velocity, normal) -- multiply normal and velocity
+	-- if proj is negative then player is moving into collisionobject
+	if proj < 0 then
+		-- remove that component in that case
+		self.velocity = self.velocity - proj * normal
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hit and not self.dead then
+		self.health = self.health - message.damage
+		go.cancel_animations(".", "position")
+		if self.close or self.visible and not self.hit then
+			self.hit = true
+			go.animate("#sprite", "tint", go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(1, 0, 0, 1), go.EASING_INCIRC, 0.25,0,function()
+				reset(self)
+			end)
+		else
+			self.hit = true
+			go.animate(".", "position", go.PLAYBACK_ONCE_PINGPONG, go.get_position(), go.EASING_INCIRC, 0.25,0,function()
+				reset(self)
+			end)
+		end
+	end
+	if message_id == hide and not self.dead then
+		self.visible = not self.visible
+		if self.visible then
+			local tint = math.abs(vmath.length(go.get_position()-go.get_position("/player")))
+			if tint <= max_dist then
+				go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, (max_dist-tint)/max_dist, go.EASING_INCIRC, 0.25)
+			else
+				--self.visible = false
+				go.set("#sprite", "tint.w", 0)
+			end
+		else
+			go.animate("#sprite", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INCIRC, 0.25)
+		end
+	end
+	if message_id == contact_pr then
+		if message.group == ghost then
+			handle_obstacle_contact(self, message.normal, message.distance)
+		end
+		if message.group == player then
+			msg.post("player", "ghost",{damage = self.damage})
+			self.health = 0
+			self.pop = true
+		end
+	end
+end
+
+function on_input(self, action_id, action)
+end

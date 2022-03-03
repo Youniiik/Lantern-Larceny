@@ -1,0 +1,76 @@
+-- Pre Hashing
+local click = hash("touch")
+local load = hash("loadup")
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+	-- Button Nodes
+	self.g_click = gui.get_node("game") -- Play Button
+	self.g_pos = gui.get_position(self.g_click)
+
+	self.s_click = gui.get_node("settings") -- Settings Button
+	self.s_pos = gui.get_position(self.s_click)
+
+	self.move = gui.get_node("move")
+
+
+	gui.set_position(self.move, vmath.vector3(1280*xpol,720*ypol,0))
+	gui.animate(self.move, "position", vmath.vector3(0,0,0), gui.EASING_OUTCIRC, 1)
+
+	-- Icon Node
+	self.icon = gui.get_node("lamp")
+	gui.animate(self.icon, "scale", vmath.vector3(0.675,0.675,0.675), gui.EASING_INCIRC, 2,0, nil, gui.PLAYBACK_LOOP_PINGPONG)
+end
+
+function final(self)
+	msg.post(".", "release_input_focus")
+end
+
+function update(self, dt)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == load then
+		gui.animate(self.move, "position", vmath.vector3(1280*message.pol,720,0), gui.EASING_INCIRC, 1,0,function()
+			ypol = -1
+			xpol = 1
+			msg.post("main:/prox", "open",{open = message.open})
+		end)
+	end
+end
+
+function on_input(self, action_id, action)
+	if action_id == click then
+		if gui.pick_node(self.g_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.g_pos.x,self.g_pos.y-22,0)
+				gui.cancel_animation(self.g_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.g_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.g_click, "position")
+				gui.animate(self.g_click, "position", self.g_pos, gui.EASING_INCIRC, 0.05)
+				msg.post(".","loadup",{open = "#game_prox",pol = 1})
+			end
+		elseif gui.pick_node(self.s_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.s_pos.x,self.s_pos.y-22,0)
+				gui.cancel_animation(self.s_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.s_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.s_click, "position")
+				gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+				msg.post(".","loadup",{open = "#settings_prox",pol = -1})
+			end
+		end
+		if action.released then
+			gui.cancel_animation(self.g_click, "position")
+			gui.animate(self.g_click, "position", self.g_pos, gui.EASING_INCIRC, 0.05)
+
+			gui.cancel_animation(self.s_click, "position")
+			gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+		end
+	end
+end

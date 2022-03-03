@@ -1,0 +1,127 @@
+-- Pre Hashing
+local click = hash("touch")
+local load = hash("loadup")
+
+-- Constants
+local soundscale = 65
+local soundpos = 975
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+	self.move = gui.get_node("move")
+	gui.set_position(self.move, vmath.vector3(1280*xpol,720*ypol,0))
+	gui.animate(self.move, "position", vmath.vector3(0,0,0), gui.EASING_OUTCIRC, 1)
+
+	self.m_click = gui.get_node("menu") -- Menu Button
+	self.m_pos = gui.get_position(self.m_click)
+
+	self.s_click = gui.get_node("save") -- Save Button
+	self.s_pos = gui.get_position(self.s_click)
+
+	self.p_click = gui.get_node("pfx") -- Particles Button
+	self.p_pos = gui.get_position(self.p_click)
+	self.p_txt = gui.get_node("pfx_state")
+
+	-- Nodes
+	self.sound = gui.get_node("sound")
+	self.soundset = gui.get_node("soundbar")
+	self.sound_len = gui.get_scale(self.soundset)
+	self.handle = gui.get_node("handle")
+
+	-- Set sound to stored value
+	self.scale = sound.get_group_gain("master")
+	gui.set_scale(self.soundset, vmath.vector3(self.scale*soundscale,2,1))
+
+	local handlepos = gui.get_position(self.handle)
+	handlepos.x = self.scale*soundpos + 232.5
+	gui.set_position(self.handle, handlepos)
+
+	self.particles = true
+	if particles then
+		self.particles = true
+		gui.set_text(self.p_txt, "ON")
+	else
+		self.particles = false
+		gui.set_text(self.p_txt, "OFF")
+	end
+end
+
+function final(self)
+	msg.post(".", "release_input_focus")
+end
+
+function update(self, dt)
+	
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == load then
+		gui.animate(self.move, "position", vmath.vector3(1280,720*message.pol,0), gui.EASING_INCIRC, 1,0,function()
+			xpol = -1
+			ypol = 1
+			msg.post("main:/prox", "open",{open = message.open})
+		end)
+	end
+end
+
+function on_input(self, action_id, action)
+	if action_id == click then
+		if gui.pick_node(self.m_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.m_pos.x,self.m_pos.y-11,0)
+				gui.cancel_animation(self.m_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.m_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.m_click, "position")
+				gui.animate(self.m_click, "position", self.m_pos, gui.EASING_INCIRC, 0.05)
+				msg.post(".","loadup",{open = "#start_prox",pol = -1})
+			end
+		elseif gui.pick_node(self.p_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.p_pos.x,self.p_pos.y-11,0)
+				gui.cancel_animation(self.p_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.p_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.p_click, "position")
+				gui.animate(self.p_click, "position", self.p_pos, gui.EASING_INCIRC, 0.05,0,function()
+					self.particles = not self.particles
+					if self.particles then
+						gui.set_text(self.p_txt, "ON")
+					else
+						gui.set_text(self.p_txt, "OFF")
+					end
+				end)
+			end
+		elseif gui.pick_node(self.s_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.s_pos.x,self.s_pos.y-11,0)
+				gui.cancel_animation(self.s_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.s_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.s_click, "position")
+				gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+
+				sound.set_group_gain("master", self.scale)
+				edit_settings(1,"sound:"..tostring(self.scale))
+				particles = self.particles
+				edit_settings(2,"prtfx:"..tostring(particles))
+			end
+		elseif gui.pick_node(self.sound, action.x, action.y) then
+			self.scale = action.x-gui.get_position(self.soundset).x
+			self.scale = self.scale/soundpos
+			gui.set_scale(self.soundset, vmath.vector3(self.scale*soundscale,2,1))
+			local handlepos = gui.get_position(self.handle)
+			handlepos.x = action.x
+			gui.set_position(self.handle, handlepos)
+			print(self.scale)
+		elseif action.released then
+			gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+			gui.animate(self.p_click, "position", self.p_pos, gui.EASING_INCIRC, 0.05)
+			gui.animate(self.m_click, "position", self.m_pos, gui.EASING_INCIRC, 0.05)
+		end
+	end
+end

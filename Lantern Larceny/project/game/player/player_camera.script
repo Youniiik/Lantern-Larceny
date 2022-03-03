@@ -1,0 +1,28 @@
+-- Pre Hashing
+local reset = hash("open")
+
+function init(self)
+	msg.post(".", "acquire_camera_focus")
+	self.start_pos = go.get_position()
+	self.flag = false
+end
+
+function final(self)
+	msg.post(".", "release_camera_focus")
+end
+
+function update(self, dt)
+	if deadfull and not self.flag then
+		self.flag = true
+		go.cancel_animations(".", "position")
+		go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, self.start_pos, go.EASING_INCIRC, 1, 0,function()
+			xpol = 1
+			ypol = 1
+			msg.post("main:/prox", "open",{open = "#restart_prox"})
+		end)
+	elseif not self.flag then
+		local newpos = go.get_position("/player")-vmath.vector3(640,360,0)
+		local time = 0.5 --local time = 50/math.abs(vmath.length(newpos-go.get_position()))
+		go.animate(".", "position", go.PLAYBACK_ONCE_FORWARD, newpos, go.EASING_LINEAR, time)
+	end
+end

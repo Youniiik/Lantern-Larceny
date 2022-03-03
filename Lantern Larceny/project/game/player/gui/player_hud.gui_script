@@ -1,0 +1,132 @@
+-- Pre Hashing
+local hit = hash("hit")
+local killed = hash("dead")
+
+local rapid = hash("rapid")
+local r_time = hash("rapidtime")
+
+local super = hash("super")
+local s_time = hash("supertime")
+
+function init(self)
+	self.hp = gui.get_node("health")
+	self.hp_tot = gui.get_node("health_total")
+	self.hp_t = gui.get_node("current_hp")
+	self.hp_s = gui.get_scale(self.hp)
+	self.hp_max = self.hp_s.x
+
+	self.scorebar = gui.get_node("score")
+	self.was_points = 0
+
+	local hp_pos = gui.get_position(self.hp)
+	local t_pos = gui.get_position(self.hp_t)
+	local s_pos = gui.get_position(self.scorebar)
+
+	gui.set_position(self.hp, hp_pos + vmath.vector3(0,120,0))
+	gui.set_position(self.hp_tot, hp_pos + vmath.vector3(0,120,0))
+	gui.set_position(self.hp_t, t_pos + vmath.vector3(0,120,0))
+	gui.set_position(self.scorebar, s_pos + vmath.vector3(-180,0,0))
+
+	gui.animate(self.hp, "position", hp_pos, gui.EASING_OUTCIRC, 1)
+	gui.animate(self.hp_tot, "position", hp_pos, gui.EASING_OUTCIRC, 1)
+	gui.animate(self.hp_t, "position", t_pos, gui.EASING_OUTCIRC, 1)
+	gui.animate(self.scorebar, "position", s_pos, gui.EASING_OUTCIRC, 1)
+
+	self.s = gui.get_node("super_icon") -- Icon
+	self.s_cd = 0 -- Cooldown Timer
+	self.s_mcd = 0 -- Maximum point of cooldown
+	self.s_bar = gui.get_node("super_cd") -- Cooldown Bar
+	self.s_scale = gui.get_scale(self.s) -- Scale
+
+	self.r = gui.get_node("rapid_icon") -- Icon
+	self.r_cd = 0 -- Cooldown Timer
+	self.r_mcd = 0 -- Maximum point of cooldown
+	self.r_bar = gui.get_node("rapid_cd") -- Cooldown Bar
+	self.r_scale = gui.get_scale(self.r) -- Scale
+
+	local reset = vmath.vector4(1,1,1,0)
+	-- setting alpha values of icons to 0
+	gui.set_color(self.r,reset)
+	gui.set_color(self.s,reset)
+end
+
+function final(self)
+end
+
+function update(self, dt)
+	if self.s_cd > 0 then
+		self.s_cd = self.s_cd - dt
+		local scale = (self.s_cd/self.s_mcd)*0.6
+		if self.s_cd <= 0 then
+			scale = self.s_scale.x
+			gui.animate(self.s, "color", vmath.vector4(1,1,1,0), gui.EASING_INSINE, 0.1,0,
+			function()
+				gui.animate(self.s_bar, "scale.x", scale, gui.EASING_INCIRC, 0.001)
+			end)
+		else
+			-- sets x scale to fraction based on time passed
+			gui.animate(self.s_bar, "scale.x", scale, gui.EASING_INCIRC, dt)
+		end
+	end
+	if self.r_cd > 0 then
+		self.r_cd = self.r_cd - dt
+		local scale = (self.r_cd/self.r_mcd)*0.6
+		if self.r_cd <= 0 then
+			scale = self.r_scale.x
+			gui.animate(self.r, "color", vmath.vector4(1,1,1,0), gui.EASING_INSINE, 0.1,0,
+			function()
+				gui.animate(self.r_bar, "scale.x", scale, gui.EASING_INCIRC, 0.001)
+			end)
+		else
+			-- sets x scale to fraction based on time passed
+			gui.animate(self.r_bar, "scale.x", scale, gui.EASING_INCIRC, dt)
+		end
+	end
+	if self.was_points ~= points then
+		self.was_points = self.was_points + math.ceil((points - self.was_points)/2)
+		if points < self.was_points then
+			self.was_points = points
+		end
+		gui.set_text(self.scorebar, "SCORE: "..tostring(self.was_points))
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hit then
+		local new_scale = message.health*self.hp_max
+		gui.set_text(self.hp_t, tostring(message.health*message.maxhealth).."/"..tostring(message.maxhealth))
+		if new_scale < 0 then
+			new_scale = 0
+		end
+		gui.cancel_animation(self.hp, "scale")
+		gui.animate(self.hp, "scale.x", new_scale, gui.EASING_INCIRC, math.abs(new_scale-self.hp_s.x)*0.1)
+		self.hp_s.x = new_scale
+	end
+	if message_id == rapid then
+		gui.animate(self.r, "color", vmath.vector4(1,1,1,1), gui.EASING_INSINE, 0.1)
+		self.r_cd = message.time
+		self.r_mcd = message.time
+		self.r_flag = true
+	end
+	if message_id == super then
+		gui.animate(self.s, "color", vmath.vector4(1,1,1,1), gui.EASING_INSINE, 0.1)
+		self.s_cd = message.time
+		self.s_mcd = message.time
+		self.s_flag = true
+	end
+	if message_id == killed then
+		local hp_pos = gui.get_position(self.hp)+ vmath.vector3(0,120,0)
+		local t_pos = gui.get_position(self.hp_t)+ vmath.vector3(0,120,0)
+		local s_pos = gui.get_position(self.scorebar)+ vmath.vector3(-180,0,0)
+
+		gui.animate(self.hp, "position", hp_pos, gui.EASING_OUTCIRC, 1)
+		gui.animate(self.hp_tot, "position", hp_pos, gui.EASING_OUTCIRC, 1)
+		gui.animate(self.hp_t, "position", t_pos, gui.EASING_OUTCIRC, 1)
+		gui.animate(self.scorebar, "position", s_pos, gui.EASING_OUTCIRC, 1,0,function()
+			msg.post("/player", "dead")
+		end)
+	end
+end
+
+function on_input(self, action_id, action)
+end

@@ -1,0 +1,30 @@
+image: "/assets/tiles/Grey Tile (64Hx64W).png"
+tile_width: 64
+tile_height: 64
+tile_margin: 0
+tile_spacing: 1
+collision: "/assets/tiles/Grey Tile (64Hx64W).png"
+material_tag: "tile"
+convex_hulls {
+  index: 0
+  count: 4
+  collision_group: "map"
+}
+convex_hulls {
+  index: 4
+  count: 4
+  collision_group: ""
+}
+collision_groups: "map"
+animations {
+  id: "grey_tile"
+  start_tile: 1
+  end_tile: 1
+  playback: PLAYBACK_ONCE_FORWARD
+  fps: 1
+  flip_horizontal: 0
+  flip_vertical: 0
+}
+extrude_borders: 1
+inner_padding: 0
+sprite_trim_mode: SPRITE_TRIM_MODE_OFF

@@ -1,0 +1,119 @@
+--sound_fraction = 1
+xpol = 0
+ypol = 1
+particles = true
+
+function deg_to_rad(deg)
+	local rad = deg/180 *math.pi
+	return rad
+end
+
+function particleplay(particle_id)
+	if particles then
+		particlefx.play(particle_id)
+	end
+end
+
+function particlestop(particle_id)
+	if particles then
+		particlefx.stop(particle_id)
+	end
+end
+
+function splitstring(inputstr, sep)
+	if sep == nil then
+		sep = "%s"
+	end
+	local t={}
+	for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+		table.insert(t, str)
+	end
+	return t
+end
+
+function edit_settings(line,newline)
+	local file = io.open(settings_file, 'r')
+	local fileContent = {}
+	for line in file:lines() do
+		table.insert(fileContent, line)
+	end
+	io.close(file)
+
+	fileContent[line] = newline 
+
+	file = io.open(settings_file, 'w')
+	for index, value in ipairs(fileContent) do
+		file:write(value..'\n')
+	end
+	io.close(file)
+end
+
+function init(self)
+	sound.play("/bg#ambience")
+	
+	msg.post(".", "acquire_input_focus")
+	-- Set white bg sprite to bg colour
+	go.set("/bg#sprite", "tint", vmath.vector4(0.34509803921568627450980392156863,0.29803921568627450980392156862745,0.28235294117647058823529411764706,0))
+
+	self.open = "#start_prox" -- current proxy
+	msg.post(self.open, "load")
+
+	settings_file = sys.get_save_file("Lantern Larceny", "settings.txt")
+	score_file = sys.get_save_file("Lantern Larceny", "scores.txt")
+	local playcheck = sys.get_save_file("Lantern Larceny", "playflag.txt")
+	local playedgame = io.open(playcheck,"r")
+
+	if playedgame == nil then
+		sys.save(playcheck, {})
+		sys.save(settings_file, {})
+		sys.save(score_file, {})
+		edit_settings(1,"sound:0.5")
+		edit_settings(2,"prtfx:true")
+		local new = io.open(playcheck,"w"):close()
+		local score = io.open(score_file,"w"):close()
+	end
+
+	local settings = io.open(settings_file,"r")
+	for line in settings:lines() do
+		if string.sub(line,1,5) == "sound" then
+			sound.set_group_gain("master", tonumber(splitstring(line,":")[2]))
+			--sound_fraction = tonumber(splitstring(line,":")[2])
+		elseif string.sub(line,1,5) == "prtfx" then
+			local value = splitstring(line,":")[2]
+			if value == "false" then
+				value = false
+			elseif value == "true" then
+				value = true
+			end
+			particles = value
+		end
+	end
+	settings:close()
+end
+
+function update(self, dt)
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("proxy_loaded") then
+		msg.post(self.open, "init")
+		msg.post(self.open, "enable")
+
+		go.animate(".", "position.x", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_LINEAR, 0.1,0,function()
+			go.set("/bg#sprite", "tint.w", 0)
+		end)
+
+	elseif message_id == hash("open") then
+		msg.post(self.open, "disable")
+		msg.post(self.open, "final")
+		msg.post(self.open, "unload")
+
+		go.set("/bg#sprite", "tint.w", 1)
+
+		msg.post(message.open, "async_load")
+		self.open = message.open
+	end
+end
+
+function on_input(self, action_id, action)
+end

@@ -1,0 +1,29 @@
+[bootstrap]
+main_collection = /project/main/main.collectionc
+
+[script]
+shared_state = 1
+
+[display]
+width = 1280
+height = 720
+
+[android]
+input_method = HiddenInputField
+
+[project]
+title = Lantern Larceny
+publisher = Youniiik
+developer = Youniiik
+bundle_resources = /project/settings.txt
+
+[physics]
+max_collisions = 128
+max_contacts = 256
+
+[particle_fx]
+max_count = 256
+
+[factory]
+max_count = 256
+

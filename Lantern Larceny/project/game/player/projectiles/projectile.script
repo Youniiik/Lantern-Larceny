@@ -1,0 +1,32 @@
+local max_gain = 0.5
+
+go.property("colour", vmath.vector4(1,1,1,1))
+go.property("damage", 25)
+
+function init(self)
+	self.dist = max_gain
+	go.set("#sprite", "tint", self.colour)
+	--print(self.dist)
+end
+
+function final(self)
+	particleplay(".")
+	sound.set_gain("#snap", self.dist)
+	sound.play("#snap")
+end
+
+function update(self, dt)
+	self.dist = (1 - (0.001*vmath.length(go.get_position("/player")-go.get_position())))*max_gain
+	if self.dist < 0 then
+		self.dist = 0
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("contact_point_response") then
+		if message.group == hash("enemy") then
+			msg.post(message.other_id, "hit", {damage = self.damage})
+		end
+		go.delete()
+	end
+end

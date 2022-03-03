@@ -1,0 +1,85 @@
+-- Pre Hashing
+local click = hash("touch")
+local load = hash("loadup")
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+	-- Button Nodes
+	self.g_click = gui.get_node("game") -- Play Button
+	self.g_pos = gui.get_position(self.g_click)
+
+	self.s_click = gui.get_node("menu") -- Settings Button
+	self.s_pos = gui.get_position(self.s_click)
+
+	self.score = gui.get_node("points")
+	gui.set_text(self.score, "SCORE: "..tostring(points))
+
+	self.scorebest = gui.get_node("highpoints")
+	gui.set_text(self.scorebest, "BEST: "..tostring(bestpoints))
+
+	self.move = gui.get_node("move")
+
+	local bestshow = gui.get_node("newbest")
+	if not newbest then
+		gui.set_color(bestshow, vmath.vector4(1,1,1,0))
+	else
+		gui.set_rotation(bestshow, vmath.quat_rotation_z(deg_to_rad(35)))
+		gui.animate(bestshow, "rotation.z", 10, gui.EASING_INOUTSINE, 1,0,nil,gui.PLAYBACK_LOOP_PINGPONG)
+	end
+
+	gui.set_position(self.move, vmath.vector3(1280*xpol,720*ypol,0))
+	gui.animate(self.move, "position", vmath.vector3(0,0,0), gui.EASING_OUTCIRC, 1)
+end
+
+function final(self)
+	msg.post(".", "release_input_focus")
+end
+
+function update(self, dt)
+	
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == load then
+		gui.animate(self.move, "position", vmath.vector3(1280*message.pol,720,0), gui.EASING_INCIRC, 1,0,function()
+			ypol = message.ypol
+			xpol = message.xpol
+			msg.post("main:/prox", "open",{open = message.open})
+		end)
+	end
+end
+
+function on_input(self, action_id, action)
+	if action_id == click then
+		if gui.pick_node(self.g_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.g_pos.x,self.g_pos.y-22,0)
+				gui.cancel_animation(self.g_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.g_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.g_click, "position")
+				gui.animate(self.g_click, "position", self.g_pos, gui.EASING_INCIRC, 0.05)
+				msg.post(".","loadup",{open = "#game_prox",pol = 1})
+			end
+		elseif gui.pick_node(self.s_click, action.x, action.y) then
+			if action.pressed then
+				local newpos = vmath.vector3(self.s_pos.x,self.s_pos.y-22,0)
+				gui.cancel_animation(self.s_click, "position")
+				sound.play("main:/bg#click")
+				gui.animate(self.s_click, "position", newpos, gui.EASING_INCIRC, 0.05)
+			elseif action.released then
+				gui.cancel_animation(self.s_click, "position")
+				gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+				msg.post(".","loadup",{open = "#start_prox",pol = -1,xpol = 1,ypol = -1})
+			end
+		elseif action.released then
+			gui.cancel_animation(self.g_click, "position")
+			gui.animate(self.g_click, "position", self.g_pos, gui.EASING_INCIRC, 0.05)
+
+			gui.cancel_animation(self.s_click, "position")
+			gui.animate(self.s_click, "position", self.s_pos, gui.EASING_INCIRC, 0.05)
+		end
+	end
+end

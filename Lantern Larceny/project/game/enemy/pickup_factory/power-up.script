@@ -1,0 +1,42 @@
+-- Pre Hashing
+local trigger_r = hash("trigger_response")
+
+go.property("type", 1) -- type 1 (hp) 2 (rapid) 3 (super)
+
+function init(self)
+	self.despawn = 600
+	sprite.play_flipbook("#sprite", "Power-Up "..tostring(self.type).." (48Hx48W)")
+	go.animate(".", "scale", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(1.2,1.2,1.2), go.EASING_INSINE, 1)
+	go.set("#glow", "tint", vmath.vector4(1.1,1.1,0.9,0.05))
+end
+
+function final(self)
+	particleplay("#collect")
+end
+
+function update(self, dt)
+	if self.despawn > 0 then
+		self.despawn = self.despawn - dt
+		if self.despawn <= 0 then
+			go.cancel_animations(".","scale")
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.25,0,function()
+				go.delete()
+			end)
+		end
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == trigger_r then
+		if message.enter then
+			msg.post("#collisionobject", "disable")
+			msg.post(message.other_id, "powerup",{type = self.type})
+			go.cancel_animations(".", "scale")
+			go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(2,2,2), go.EASING_INELASTIC, 0.25,0,
+			function()
+				go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.0001)
+				go.delete()
+			end)
+		end
+	end
+end

@@ -1,0 +1,365 @@
+-- Prehashing
+-- Movement
+local up = hash("up")
+local down = hash("down")
+local left = hash("left")
+local right = hash("right")
+
+-- Message
+local contact_pr = hash("contact_point_response")
+local map = hash("map")
+local ghost = hash("enemy")
+local powerup = hash("powerup")
+local ghost_hit = hash("ghost")
+local pointup = hash("points")
+local killed = hash("dead")
+
+-- Weapons
+local click = hash("touch")
+local switch = hash("switch")
+
+-- Movement Data
+local speed = 250
+
+-- Global Variables
+lantern = true
+dead = false
+deadfull = false
+newbest = false
+bestpoints = -1
+points = 0
+
+local function i_switch(self)
+	if not self.switch then
+		self.switch = true
+		local fullscale = vmath.vector3(1,1,1)
+		local noscale = vmath.vector3(0,0,0)
+		if not lantern and not self.super_flag then
+			-- Hide Gun
+			go.cancel_animations("#gun", "scale")
+			go.animate("#gun", "scale", go.PLAYBACK_ONCE_FORWARD, noscale, go.EASING_INCIRC, 0.1,0,function()
+				if self.switch then
+					lantern = not lantern
+				end
+			end)
+
+			-- Show Lantern
+			go.cancel_animations("#lantern", "scale")
+			go.animate("#lantern", "scale", go.PLAYBACK_ONCE_FORWARD, fullscale, go.EASING_INCIRC, 0.1)
+			go.cancel_animations("#lantern_light", "scale")
+			go.animate("#lantern_light", "scale", go.PLAYBACK_ONCE_FORWARD, fullscale, go.EASING_INCIRC, 0.1)
+			go.cancel_animations("#lantern_glow", "scale")
+			go.animate("#lantern_glow", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0.25, go.EASING_INCIRC, 0.15)
+		else
+			lantern = not lantern
+			-- Hide Lantern
+			go.cancel_animations("#lantern", "scale")
+			go.animate("#lantern", "scale", go.PLAYBACK_ONCE_FORWARD, noscale, go.EASING_INCIRC, 0.1)
+			go.cancel_animations("#lantern_light", "scale")
+			go.animate("#lantern_light", "scale", go.PLAYBACK_ONCE_FORWARD, noscale, go.EASING_INCIRC, 0.1)
+			if not self.super_flag then
+				go.cancel_animations("#lantern_glow", "scale")
+				go.animate("#lantern_glow", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INCIRC, 0.05)
+			end
+
+			-- Show Gun
+			go.cancel_animations("#gun", "scale")
+			go.animate("#gun", "scale", go.PLAYBACK_ONCE_FORWARD, fullscale, go.EASING_INCIRC, 0.1,0,function()
+				if self.switch then
+					self.switch = false
+				end
+			end)
+		end
+	end
+end
+
+function init(self)
+	-- Complete randomness
+	math.randomseed(os.time())
+	math.random()
+
+	msg.post(".", "acquire_input_focus")
+
+	self.velocity = vmath.vector3()
+	self.correction = vmath.vector3()
+
+	self.cd = 0
+	self.hit_cd = 0
+
+	self.input_cd = 0
+
+	-- Power Up Cooldowns
+	self.rapid_fire = 0
+	self.superlantern = 0
+
+	-- Power Up Flags
+	self.rapid_flag = false
+	self.super_flag = false
+	
+
+	self.health = 100
+	self.health_max = 100
+
+	go.set("#gun", "scale",vmath.vector3(0,0,0))
+	go.set("#lantern_glow", "tint.w",0.25)
+	i_switch(self)
+end
+
+function final(self)
+	msg.post(".", "release_input_focus")
+end
+
+function update(self, dt)
+	-- Switch to gun
+	if lantern ~= self.switch and not self.switch then
+		if not self.super_flag then -- switch items
+			i_switch(self)
+		end
+	end
+
+	-- Bullet Cooldown
+	if self.cd > 0 then
+		self.cd = self.cd - dt
+		if self.cd < 0 then
+			self.cd = 0
+		end
+	end
+
+	-- Switch Cooldown
+	if self.input_cd > 0 then
+		self.input_cd = self.input_cd - dt
+		if self.input_cd < 0 then
+			self.input_cd = 0
+			self.switch = false
+		end
+	end
+
+	-- Invincibility Frames
+	if self.hit_cd > 0 then
+		self.hit_cd = self.hit_cd - dt
+		if self.hit_cd < 0 then
+			self.hit_cd = 0
+		end
+	end
+
+	-- Power Up cooldowns
+	if self.rapid_fire > 0 then
+		self.rapid_fire = self.rapid_fire - dt
+		if self.rapid_fire <= 0 then
+			self.rapid_flag = false
+			self.rapid_fire = 0
+		end
+	end
+	if self.superlantern > 0 then
+		self.superlantern = self.superlantern - dt
+		if self.superlantern <= 0 then
+			self.super_flag = false
+			self.superlantern = 0
+			i_switch(self)
+			--i_switch(self)
+		end
+	end
+
+	if self.super_flag and go.get_scale("#lantern") ~= vmath.vector3(0,0,0) and self.switch then
+		self.switch = false
+		go.cancel_animations("#lantern", "scale")
+		go.animate("#lantern", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.1)
+		go.cancel_animations("#lantern_light", "scale")
+		go.animate("#lantern_light", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.1)
+		go.cancel_animations("#gun", "scale")
+		go.animate("#gun", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(1,1,1), go.EASING_INCIRC, 0.1)
+	end
+
+	-- Movement
+	local newpos = go.get_position() + ((self.velocity*speed)*dt)
+	go.set_position(newpos)
+	self.velocity = vmath.vector3()
+	self.correction = vmath.vector3()
+end
+
+-- Collisions (https://defold.com/tutorials/platformer/)
+local function handle_obstacle_contact(self, normal, distance)
+	-- project the correction vector onto the contact normal
+	local proj = vmath.dot(self.correction, normal)
+	-- calculate compensation for contact point
+	local comp = (distance - proj) * normal
+	-- add to correction
+	self.correction = self.correction + comp
+	-- apply the compensation to the player character
+	go.set_position(go.get_position("/player") + comp,"/player")
+	-- project the velocity onto the normal
+	proj = vmath.dot(self.velocity, normal) -- multiply normal and velocity
+	-- if proj is negative then player is moving into collisionobject
+	if proj < 0 then
+		-- remove that component in that case
+		self.velocity = self.velocity - proj * normal
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == killed then
+		deadfull = true
+		--msg.post("/player_cam", "open",{open = "#restart_prox"})
+
+		-- Checks number of scores
+		local oldscore = 0
+		local score = io.open(score_file,"r")
+		for line in score:lines() do
+			oldscore = oldscore + 1
+			print(line,oldscore)
+		end
+		score:close()
+
+		-- Write new score to file
+		local score = io.open(score_file,"a")
+		score:write(points,"\n")
+		score:close()
+
+		-- Checks which score is the highest
+		local bestpos, curpos = 0, 0
+		local score = io.open(score_file,"r")
+		for line in score:lines() do
+			curpos = curpos + 1
+			if tonumber(line) > bestpoints then
+				bestpos = tonumber(curpos)
+				bestpoints = tonumber(line)
+			end
+		end
+		if bestpos > oldscore then
+			newbest = true
+		end
+		score:close()
+
+		go.delete()
+	end
+	if message_id == pointup then
+		points = points + message.points
+	end
+	if message_id == contact_pr then
+		if message.group == ghost then
+		else
+			handle_obstacle_contact(self, message.normal, message.distance)
+		end
+	end
+	if message_id == ghost_hit then
+		if self.hit_cd == 0 then
+			self.health = self.health-message.damage
+			self.hit_cd = 0.5
+			if self.health <= 0 and not dead then
+				self.health = 0
+				dead = true
+				go.animate("#lantern", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.1)
+				go.animate("#lantern_light", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.1)
+				go.animate("#lantern_glow", "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INCIRC, 0.05)
+				go.animate("#gun", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.1)
+				go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(2,2,2), go.EASING_INELASTIC, 0.5,0.1,
+				function()
+					go.animate(".", "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0,0,0), go.EASING_INCIRC, 0.0001)
+					msg.post("#collisionobject", "disable")
+					msg.post("#player_hud", "dead")
+				end)
+			end
+			go.animate("#sprite", "tint", go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(1, 0, 0, 1), go.EASING_INCIRC, 0.25)
+			msg.post("#player_hud", "hit",{health = self.health/self.health_max, maxhealth = self.health_max})
+		end
+	end
+
+	if message_id == powerup then
+		if message.type == 1 then
+			self.health = self.health + 10
+			if self.health > self.health_max then
+				self.health = self.health_max
+			end
+			msg.post("#player_hud", "hit",{health = self.health/self.health_max, maxhealth = self.health_max})
+		elseif message.type == 2 then
+			self.rapid_flag = true
+			self.rapid_fire = 10
+			sound.set_gain("#zap2.1",0.5)
+			sound.play("#zap2.1")
+			go.animate("#zap2.1", "gain", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_INSINE, 0.25,0.45)
+			msg.post("#player_hud","rapid",{time = self.rapid_fire})
+		elseif message.type == 3 then
+			if not self.super_flag then
+				lantern = true
+				i_switch(self)
+				lantern = true
+			end
+			self.super_flag = true
+			self.superlantern = 10
+			msg.post("#player_hud","super",{time = self.superlantern})
+			go.animate("#lantern_glow", "tint.w", go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_INCIRC, 0.2)
+		end
+	end
+end
+--[]
+
+function on_input(self, action_id, action)
+	if action_id == switch and not dead then
+		if action.pressed and not self.switch and self.input_cd <= 0 then
+			if not self.super_flag then -- switch items
+				i_switch(self)
+			end
+		elseif action.released then
+			self.input_cd = 0.05
+		end
+	end
+
+	if action.x and action.y then -- mouse movement
+		go.set_position(go.get_position("/player_cam")+vmath.vector3(action.x,action.y,0.5),"/pointer")
+
+		-- let game object follow mouse/touch movement
+		local from = go.get_position() -- player position
+		local to = go.get_position("/pointer") --vmath.vector3(action.x,action.y,0)-vmath.vector3(480,320,0)+go.get_position()
+		-- globalise mouse coords
+		local direction = to-from
+		local angle = math.atan2(direction.y, direction.x) -- tangent of x and y
+		local rotation = vmath.quat_rotation_z(angle) -- z rotation in radians (I think)
+		go.set_rotation(rotation)
+	end
+
+	if not dead then
+		-- Movement Inputs
+		if action_id == up then
+			self.velocity.y = 1
+		elseif action_id == down then
+			self.velocity.y = -1
+		elseif action_id == left then
+			self.velocity.x = -1
+		elseif action_id == right then
+			self.velocity.x = 1
+		end
+		--[]
+
+		-- Shooting
+		if action_id == click then
+			if self.cd == 0 and ((not lantern) or self.super_flag) then
+				if not self.rapid_flag then
+					self.cd = 1
+					sound.play("#zap1")
+					local rgb = vmath.vector4(math.random(0,1),1,math.random(0,2)/10,math.random(6,8)/10)
+					for i = 1,5 do
+						local rotation = go.get_rotation() * vmath.quat_rotation_z(-deg_to_rad(10*i)-deg_to_rad(60))
+						local position = go.get_position("/player") + vmath.rotate(rotation, vmath.vector3(0, 63, 0))
+						local bullet = factory.create("#projectiles", position, rotation, {colour = rgb})
+						local to = position + vmath.rotate(rotation, vmath.vector3(0, 500, 0))
+						go.animate(bullet, "position", go.PLAYBACK_ONCE_FORWARD, to, go.EASING_OUTSINE, vmath.length(position-to)*0.0025, 0, function()
+							go.delete(bullet)
+						end)
+					end
+				else
+					self.cd = 0.075
+					sound.play("#zap2.2")
+					local rgb = vmath.vector4(math.random(0,1),1,math.random(0,2)/10,math.random(6,8)/10)
+					local rotation = go.get_rotation() * vmath.quat_rotation_z(-deg_to_rad(90))
+					local position = go.get_position("/player") + vmath.rotate(rotation, vmath.vector3(0, 63, 0))
+					local bullet = factory.create("#projectiles", position, rotation, {colour = rgb,damage = 10})
+					local to = position + vmath.rotate(rotation, vmath.vector3(0, 500, 0))
+					go.animate(bullet, "position", go.PLAYBACK_ONCE_FORWARD, to, go.EASING_OUTSINE, vmath.length(position-to)*0.0025, 0, function()
+						go.delete(bullet)
+					end)
+				end
+			end
+		end
+		--[]
+	end
+end

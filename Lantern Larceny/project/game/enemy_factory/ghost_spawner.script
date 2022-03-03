@@ -1,0 +1,180 @@
+-- Pre Hashing
+local dead = hash("dead")
+
+-- Ghost Classes
+local speed = { -- Speedster Class
+	health = 10,
+	damage = 10,
+	speed = 200,
+	colour = vmath.vector4(0.4, 0.6, 1, 1), -- Cyan
+	scale = 0.75,
+	dropchance = vmath.vector4(15,20,30,1),
+	points = 2
+}
+
+local tank = { -- Tank Class
+	health = 500,
+	damage = 40,
+	speed = 90,
+	colour = vmath.vector4(1, 0.5, 0.5, 1), -- Red
+	scale = 2,
+	dropchance = vmath.vector4(15,15,20,3),
+	points = 5
+}
+
+local grunt = { -- Grunt Class
+	health = 100,
+	damage = 25,
+	speed = 140,
+	colour = vmath.vector4(1, 0.6, 0.8, 1), -- Purpleish
+	scale = 1.1,
+	dropchance = vmath.vector4(2.5,7.5,20,2),
+	points = 2
+}
+
+-- Constants
+local m_stage = 6
+
+local function stagecheck(self)
+	if self.stage > m_stage then
+		self.stage = 1
+	end
+	if self.stage == 1 then
+		self.g_max = 5
+		self.max_base = 100
+		self.max_grunt = 0
+		self.max_speed = 0
+		self.max_tank = 0
+	elseif self.stage == 2 then
+		self.max_base = 80
+		self.max_grunt = 20
+		self.max_speed = 0
+		self.max_tank = 0
+	elseif self.stage == 2 then
+		self.max_base = 90
+		self.max_grunt = 0
+		self.max_speed = 10
+		self.max_tank = 0
+	elseif self.stage == 3 then
+		self.g_max = 6
+		self.max_base = 85
+		self.max_grunt = 0
+		self.max_speed = 15
+		self.max_tank = 0
+	elseif self.stage == 4 then
+		self.g_max = 7
+		self.max_base = 75
+		self.max_grunt = 10
+		self.max_speed = 15
+		self.max_tank = 0
+	elseif self.stage == 5 then
+		self.g_max = 8
+		self.max_base = 60
+		self.max_grunt = 20
+		self.max_speed = 15
+		self.max_tank = 5
+	elseif self.stage == 6 then
+		self.g_max = 7
+		self.max_base = 70
+		self.max_grunt = 20
+		self.max_speed = 0
+		self.max_tank = 10
+	end
+end
+
+function init(self)
+	-- True Random
+	math.randomseed(os.time())
+	math.random()
+
+	-- Spawn Timer
+	self.timer = 0
+	self.set_time = 3
+	self.time_elapsed = 0
+	
+	self.time_c = false
+
+	-- Enemy Amount
+	self.ghosts = 0
+
+	self.max_base = 100--60
+	self.base = 0
+	self.max_grunt = 0--20
+	self.grunt = 0
+	self.max_speed = 0--15
+	self.speed = 0
+	self.max_tank = 0--5
+	self.tank = 0
+
+	self.g_max = 5
+
+	self.stage = 1
+end
+
+function final(self)
+	
+end
+
+function update(self, dt)
+	self.timer = self.timer - dt
+	self.time_elapsed = self.time_elapsed + dt
+	if math.floor(self.time_elapsed)%20 < 2 and not self.time_c then
+		-- Decrease spawn cooldown
+		self.set_time = self.set_time - self.set_time/8
+		self.stage = self.stage + 1
+		stagecheck(self)
+		self.time_c = true
+	elseif math.floor(self.time_elapsed)%20 >= 2 and self.time_c then
+		self.time_c = false
+	end
+	
+	if self.timer <= 0 and self.ghosts < self.g_max*2 then
+		self.timer = self.set_time -- reset cooldown
+		local coord = vmath.vector3(math.random(300,1000),math.random(300,1000),0)
+		
+		local posneg = math.ceil(math.random(0,2))
+		if posneg == 2 then
+			posneg = -1
+		else
+			posneg = 1
+		end
+		if not deadfull then
+			coord = go.get_position("/player") + coord*posneg
+			if coord.x > 4000 or coord.x < 96 then
+				coord = go.get_position("/player") + coord*-posneg
+			end
+			if coord.y > 1952 or coord.y < 96 then
+				coord = go.get_position("/player") + coord*-posneg
+			end
+		else
+			coord = go.get_position("/pointer") + coord*posneg
+			if coord.x > 4000 or coord.x < 96 then
+				coord = go.get_position("/pointer") + coord*-posneg
+			end
+			if coord.y > 1952 or coord.y < 96 then
+				coord = go.get_position("/pointer") + coord*-posneg
+			end
+		end
+		local type = math.random(0,100)
+		if type <= self.max_base then
+			factory.create("#ghost_factory",coord)
+			--self.base = self.base + 1
+		elseif type <= self.max_base + self.max_grunt then
+			factory.create("#ghost_factory",coord,nil,grunt)
+			--self.grunt = self.grunt + 1
+		elseif type <= self.max_base + self.max_grunt + self.max_speed then
+			factory.create("#ghost_factory",coord,nil,speed)
+			--self.speed = self.speed + 1
+		else
+			factory.create("#ghost_factory",coord,nil,tank)
+			--self.tank = self.tank + 1
+		end
+		self.ghosts = self.ghosts + 1
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == dead then
+		self.ghosts = self.ghosts - 1
+	end
+end
